@@ -1,4 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live AI Trading Bot</title>
+    <style>
+        body { font-family: Arial; background:#000; color:#0f0; text-align:center; }
+        .card { border:1px solid #0f0; padding:20px; margin:20px; }
+        .buy { color:lime; }
+        .sell { color:red; }
+        .hold { color:yellow; }
+    </style>
+</head>
+<body>
 
+<h1>📈 Live AI Intraday Bot</h1>
+
+<div class="card">
+    <h2 id="symbol">Loading...</h2>
+    <p>Price: <span id="price"></span></p>
+    <p>RSI: <span id="rsi"></span></p>
+    <p>EMA9: <span id="ema9"></span></p>
+    <p>EMA21: <span id="ema21"></span></p>
+    <p>Volume Spike: <span id="volume"></span></p>
+    <h2 id="signal" class="hold">Signal: WAIT</h2>
+</div>
+
+<script>
 const API_KEY = "QTBO0G73GXOPLCW3";
 const SYMBOL = "RELIANCE.BSE"; // try also TCS.BSE, INFY.BSE
 
@@ -97,3 +123,8 @@ async function run(){
 // refresh every 1 min (API limit safe)
 setInterval(run, 60000);
 run();
+
+</script>
+
+</body>
+</html>
