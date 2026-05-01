@@ -35,12 +35,22 @@ async function fetchData() {
     let res = await fetch(url);
     let data = await res.json();
 
-    // Check if API limit reached or data is missing
-    if (!data["Time Series (5min)"]) {
-        throw new Error(data["Note"] ? "API Limit Reached" : "Data Not Found");
+    // Debugging: This will show you exactly what the API sent back
+    console.log("API Response:", data);
+
+    if (data["Note"]) {
+        throw new Error("API Limit Reached (5 calls/min)");
+    }
+
+    if (data["Error Message"]) {
+        throw new Error("Invalid Symbol or API Key");
     }
 
     let series = data["Time Series (5min)"];
+    if (!series) {
+        throw new Error("Data Not Found for this Symbol");
+    }
+
     let prices = [];
     let volume = [];
 
