@@ -4,10 +4,11 @@
     <title>Live AI Trading Bot</title>
     <style>
         body { font-family: Arial; background:#000; color:#0f0; text-align:center; }
-        .card { border:1px solid #0f0; padding:20px; margin:20px; }
-        .buy { color:lime; }
-        .sell { color:red; }
+        .card { border:1px solid #0f0; padding:20px; margin:20px; border-radius: 10px; }
+        .buy { color:lime; font-weight: bold; }
+        .sell { color:red; font-weight: bold; }
         .hold { color:yellow; }
+        .wait { color:#888; }
     </style>
 </head>
 <body>
@@ -16,23 +17,28 @@
 
 <div class="card">
     <h2 id="symbol">Loading...</h2>
-    <p>Price: <span id="price"></span></p>
-    <p>RSI: <span id="rsi"></span></p>
-    <p>EMA9: <span id="ema9"></span></p>
-    <p>EMA21: <span id="ema21"></span></p>
-    <p>Volume Spike: <span id="volume"></span></p>
-    <h2 id="signal" class="hold">Signal: WAIT</h2>
+    <p>Price: <span id="price">--</span></p>
+    <p>RSI: <span id="rsi">--</span></p>
+    <p>EMA9: <span id="ema9">--</span></p>
+    <p>EMA21: <span id="ema21">--</span></p>
+    <p>Volume Spike: <span id="volume">--</span></p>
+    <h2 id="signal" class="wait">Signal: INITIALIZING</h2>
 </div>
 
 <script>
 const API_KEY = "QTBO0G73GXOPLCW3";
-const SYMBOL = "RELIANCE.BSE"; // try also TCS.BSE, INFY.BSE
+const SYMBOL = "RELIANCE.BSE"; 
 
 // ===== FETCH LIVE DATA =====
 async function fetchData() {
     let url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=5min&apikey=${API_KEY}`;
     let res = await fetch(url);
     let data = await res.json();
+
+    // Check if API limit reached or data is missing
+    if (!data["Time Series (5min)"]) {
+        throw new Error(data["Note"] ? "API Limit Reached" : "Data Not Found");
+    }
 
     let series = data["Time Series (5min)"];
     let prices = [];
@@ -49,78 +55,94 @@ async function fetchData() {
     return { prices, volume };
 }
 
-// ===== EMA =====
+// ===== EMA (Fixed with Initial Value) =====
 function EMA(prices, period) {
-    let k = 2/(period+1);
-    let ema = prices.slice(0, period).reduce((a,b)=>a+b)/period;
+    if (prices.length < period) return 0;
+    
+    let k = 2 / (period + 1);
+    // Added ,0 to reduce to prevent empty array crash
+    let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
-    for(let i=period;i<prices.length;i++){
-        ema = prices[i]*k + ema*(1-k);
+    for (let i = period; i < prices.length; i++) {
+        ema = prices[i] * k + ema * (1 - k);
     }
     return ema;
 }
 
 // ===== RSI =====
-function RSI(prices, period=14){
-    let gain=0, loss=0;
-    for(let i=1;i<=period;i++){
-        let diff = prices[i]-prices[i-1];
-        if(diff>0) gain+=diff;
-        else loss-=diff;
+function RSI(prices, period = 14) {
+    if (prices.length <= period) return 50;
+    
+    let gain = 0, loss = 0;
+    for (let i = 1; i <= period; i++) {
+        let diff = prices[i] - prices[i - 1];
+        if (diff > 0) gain += diff;
+        else loss -= diff;
     }
-    if(loss===0) return 100;
-    let rs = gain/loss;
-    return 100-(100/(1+rs));
+    if (loss === 0) return 100;
+    let rs = gain / loss;
+    return 100 - (100 / (1 + rs));
 }
 
-// ===== Volume Spike =====
-function volumeSpike(vol){
-    let avg = vol.slice(0,-1).reduce((a,b)=>a+b)/(vol.length-1);
-    return vol[vol.length-1] > avg*1.5;
+// ===== Volume Spike (Fixed with Initial Value) =====
+function volumeSpike(vol) {
+    if (vol.length < 2) return false;
+    let avg = vol.slice(0, -1).reduce((a, b) => a + b, 0) / (vol.length - 1);
+    return vol[vol.length - 1] > avg * 1.5;
 }
 
 // ===== SIGNAL =====
-function getSignal(prices, volume){
-    let ema9 = EMA(prices,9);
-    let ema21 = EMA(prices,21);
+function getSignal(prices, volume) {
+    // Safety check: ensure we have enough data for EMA21
+    if (prices.length < 21) return { signal: "WAITING FOR DATA", rsi: 0, ema9: 0, ema21: 0, vol: false };
+
+    let ema9 = EMA(prices, 9);
+    let ema21 = EMA(prices, 21);
     let rsi = RSI(prices);
     let vol = volumeSpike(volume);
 
     let signal = "HOLD";
-    if(ema9>ema21 && rsi<60 && vol) signal="BUY";
-    else if(ema9<ema21 && rsi>40 && vol) signal="SELL";
+    if (ema9 > ema21 && rsi < 60 && vol) signal = "BUY";
+    else if (ema9 < ema21 && rsi > 40 && vol) signal = "SELL";
 
     return { ema9, ema21, rsi, vol, signal };
 }
 
 // ===== UI =====
-function updateUI(res, price){
+function updateUI(res, price) {
     document.getElementById("symbol").innerText = SYMBOL;
-    document.getElementById("price").innerText = price.toFixed(2);
-    document.getElementById("rsi").innerText = res.rsi.toFixed(2);
-    document.getElementById("ema9").innerText = res.ema9.toFixed(2);
-    document.getElementById("ema21").innerText = res.ema21.toFixed(2);
-    document.getElementById("volume").innerText = res.vol ? "YES" : "NO";
+    document.getElementById("price").innerText = price ? price.toFixed(2) : "--";
+    document.getElementById("rsi").innerText = res.rsi ? res.rsi.toFixed(2) : "--";
+    document.getElementById("ema9").innerText = res.ema9 ? res.ema9.toFixed(2) : "--";
+    document.getElementById("ema21").innerText = res.ema21 ? res.ema21.toFixed(2) : "--";
+    document.getElementById("volume").innerText = res.vol ? "YES 🚀" : "NO";
 
     let el = document.getElementById("signal");
     el.innerText = "Signal: " + res.signal;
-    el.className = res.signal.toLowerCase();
+    
+    // Set CSS class for colors
+    if (res.signal === "BUY") el.className = "buy";
+    else if (res.signal === "SELL") el.className = "sell";
+    else if (res.signal === "HOLD") el.className = "hold";
+    else el.className = "wait";
 }
 
 // ===== MAIN =====
-async function run(){
+async function run() {
     try {
         let data = await fetchData();
         let result = getSignal(data.prices, data.volume);
-        let lastPrice = data.prices[data.prices.length-1];
+        let lastPrice = data.prices[data.prices.length - 1];
 
         updateUI(result, lastPrice);
-    } catch(e){
-        console.log("Error:", e);
+    } catch (e) {
+        console.error("Error:", e.message);
+        document.getElementById("signal").innerText = "Signal: API ERROR";
+        document.getElementById("signal").className = "wait";
     }
 }
 
-// refresh every 1 min (API limit safe)
+// Refresh every 1 min (AlphaVantage Free Tier safe)
 setInterval(run, 60000);
 run();
 
