@@ -2,134 +2,160 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Dynamic Momentum Scanner</title>
+    <title>AI Stock Picker - Trace Enabled</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background:#050505; color:#0f0; text-align:center; padding: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-top: 20px; }
-        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; }
-        .buy-zone { border: 2px solid #0f0; box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); }
-        .sell-zone { border: 2px solid #ff4444; box-shadow: 0 0 10px rgba(255, 68, 68, 0.3); }
-        .btn-scan { background: #0f0; color: #000; padding: 15px 30px; border: none; font-size: 1.2em; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .loading { font-size: 1.1em; color: yellow; margin: 20px; }
-        .summary { margin: 20px auto; max-width: 400px; background: #181818; padding: 10px; border-radius: 8px; border: 1px solid #444; }
+        body { font-family: 'Segoe UI', sans-serif; background:#0a0a0b; color:#e0e0e0; text-align:center; padding: 20px; margin-bottom: 250px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 30px; }
+        .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 12px; }
+        .buy-zone { border-left: 5px solid #238636; }
+        .sell-zone { border-left: 5px solid #da3633; }
+        .btn-scan { background: #238636; color: white; padding: 15px 40px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        
+        /* Console Log Window */
+        #console-log {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 200px;
+            background: #000; color: #0f0; font-family: 'Courier New', monospace;
+            text-align: left; padding: 10px; overflow-y: auto; border-top: 2px solid #333;
+            font-size: 0.85em; z-index: 1000;
+        }
+        .log-entry { margin: 2px 0; border-bottom: 1px solid #111; }
+        .log-err { color: #ff4444; }
+        .log-warn { color: #ffae00; }
+        .log-success { color: #00ff00; }
     </style>
 </head>
 <body>
 
-    <h1>🚀 DYNAMIC AI STOCK PICKER</h1>
-    <p>Scanning Nifty 50 & High-Volume Midcaps for Momentum</p>
+    <h1>🚀 AI DYNAMIC SCANNER</h1>
+    <p>Yahoo Finance Engine with Error Tracing</p>
     
-    <button class="btn-scan" id="scanBtn" onclick="runDynamicScanner()">FIND TOP 5 POTENTIAL STOCKS</button>
-    <div id="loader" class="loading" style="display:none;">Analyzing market trends...</div>
-
-    <div id="summaryBox" class="summary" style="display:none;">
-        <strong>Market Sentiment:</strong> <span id="marketVerdict">--</span>
-    </div>
+    <button class="btn-scan" id="scanBtn" onclick="runYahooScanner()">RUN SYSTEM ANALYSIS</button>
 
     <div class="grid" id="resultsGrid"></div>
 
+    <!-- Trace Logger -->
+    <div id="console-log">
+        <div class="log-entry">System initialized. Ready for scan...</div>
+    </div>
+
 <script>
-const API_KEY = "QTBO0G73GXOPLCW3"; // Use your AlphaVantage Key
-// The "Pool" to scan from dynamically
 const STOCK_POOL = [
-    "RELIANCE.BSE", "TATASTEEL.BSE", "HDFCBANK.BSE", "INFY.BSE", 
-    "ITC.BSE", "SBIN.BSE", "BHARTIARTL.BSE", "ICICIBANK.BSE", 
-    "TATAMOTORS.BSE", "WIPRO.BSE", "ONGC.BSE", "ADANIPORTS.BSE"
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
+    "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "TATAMOTORS.NS"
 ];
 
-async function runDynamicScanner() {
+// --- TRACING FUNCTION ---
+function addLog(msg, type = 'info') {
+    const logBox = document.getElementById("console-log");
+    const entry = document.createElement("div");
+    entry.className = `log-entry ${type === 'error' ? 'log-err' : type === 'success' ? 'log-success' : 'log-info'}`;
+    const timestamp = new Date().toLocaleTimeString();
+    entry.innerText = `[${timestamp}] ${msg}`;
+    logBox.prepend(entry); // Newest logs at top
+    console.log(`[${type.toUpperCase()}] ${msg}`);
+}
+
+async function runYahooScanner() {
     const btn = document.getElementById("scanBtn");
-    const loader = document.getElementById("loader");
     const grid = document.getElementById("resultsGrid");
     
+    addLog("Starting Global Market Scan...", "info");
     btn.disabled = true;
-    loader.style.display = "block";
     grid.innerHTML = "";
-    
     let picksFound = 0;
 
     for (const symbol of STOCK_POOL) {
-        if (picksFound >= 5) break; // Stop once we find our top 5
+        if (picksFound >= 5) {
+            addLog("Found 5 potential trades. Stopping scan.", "success");
+            break;
+        }
 
         try {
-            const data = await fetchStockData(symbol);
-            const analysis = analyzeStock(symbol, data);
+            addLog(`Requesting data for ${symbol}...`);
+            const prices = await fetchYahooData(symbol);
             
-            // LEGIT CONDITION: Only show the stock if it's "Buy" or "Sell" (Significant Action)
-            if (analysis.isLegit) {
+            if (!prices || prices.length === 0) {
+                addLog(`Skipping ${symbol}: Data returned empty or null.`, "error");
+                continue;
+            }
+
+            addLog(`Analyzing ${symbol} technicals...`, "info");
+            const analysis = analyzeStock(symbol, prices);
+            
+            if (analysis.verdict !== "NEUTRAL") {
+                addLog(`MATCH FOUND: ${symbol} listed as ${analysis.verdict}`, "success");
                 renderCard(symbol, analysis);
                 picksFound++;
+            } else {
+                addLog(`${symbol} is currently Neutral. Skipping.`);
             }
-        } catch (e) { console.error(e); }
-
-        // API Limit protection
-        await new Promise(r => setTimeout(r, 12000));
-        loader.innerText = `Found ${picksFound}/5 stocks. Scanning next...`;
+        } catch (e) { 
+            addLog(`CRITICAL ERROR [${symbol}]: ${e.message}`, "error");
+        }
+        
+        await new Promise(r => setTimeout(r, 800)); 
     }
 
-    loader.style.display = "none";
+    addLog("Scan Operation Complete.", "info");
     btn.disabled = false;
-    document.getElementById("summaryBox").style.display = "block";
-    document.getElementById("marketVerdict").innerText = picksFound > 0 ? "Opportunities Found" : "Market Neutral";
 }
 
-async function fetchStockData(symbol) {
-    const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`);
-    const json = await res.json();
-    const series = json["Time Series (Daily)"];
-    const dates = Object.keys(series).slice(0, 30);
-    return dates.map(d => parseFloat(series[d]["4. close"])).reverse();
+async function fetchYahooData(symbol) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo`;
+    
+    try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP Status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (!data.chart || !data.chart.result) {
+            throw new Error("Malformed JSON response from Yahoo.");
+        }
+
+        const result = data.chart.result[0].indicators.quote[0].close.filter(p => p != null);
+        addLog(`Successfully retrieved ${result.length} price points for ${symbol}`, "success");
+        return result;
+
+    } catch (err) {
+        if (err.message.includes('Failed to fetch')) {
+            addLog(`CORS Error: Access to Yahoo is blocked. Open the file via a Web Server (Live Server) or use a Proxy.`, "error");
+        } else {
+            addLog(`Fetch Error: ${err.message}`, "error");
+        }
+        return null;
+    }
 }
 
 function analyzeStock(symbol, prices) {
     const currentPrice = prices[prices.length - 1];
-    const ema9 = calculateEMA(prices, 9);
-    const rsi = calculateRSI(prices);
+    const prevPrice = prices[prices.length - 2];
+    const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
     
+    const isBreakout = currentPrice > sma5 && prevPrice <= sma5;
+    const volatility = ((currentPrice - prevPrice) / prevPrice) * 100;
+
     let verdict = "NEUTRAL";
-    let isLegit = false;
+    if (isBreakout && volatility > 0.3) verdict = "BUY";
+    if (currentPrice < (sma5 * 0.98)) verdict = "SELL";
 
-    if (rsi > 75) {
-        verdict = "SELL";
-        isLegit = true; // Overheated is a legit signal to act
-    } else if (currentPrice > ema9 && rsi > 48 && rsi < 62) {
-        verdict = "BUY";
-        isLegit = true; // Strong momentum breakout is a legit signal
-    }
-
-    return { currentPrice, ema9, rsi, verdict, isLegit };
+    return { currentPrice, sma5, volatility, verdict };
 }
 
 function renderCard(symbol, analysis) {
     const card = document.createElement("div");
     card.className = `card ${analysis.verdict === 'BUY' ? 'buy-zone' : 'sell-zone'}`;
     card.innerHTML = `
-        <h3>${symbol.split('.')[0]}</h3>
-        <p>Price: ₹${analysis.currentPrice.toFixed(2)}</p>
-        <small>RSI: ${analysis.rsi.toFixed(2)} | EMA9: ${analysis.ema9.toFixed(2)}</small>
-        <hr style="border:0; border-top:1px solid #333; margin:10px 0;">
-        <div style="font-weight:bold; color:${analysis.verdict === 'BUY' ? '#0f0' : '#f44'}">
-            ${analysis.verdict === 'BUY' ? '🔥 POTENTIAL BUY' : '⚠️ EXIT/SELL'}
+        <h2 style="color:#58a6ff; margin:0;">${symbol}</h2>
+        <p style="font-size:1.5em; margin:10px 0;">₹${analysis.currentPrice.toFixed(2)}</p>
+        <div style="color:${analysis.verdict === 'BUY' ? '#3fb950' : '#f85149'}; font-weight:bold;">
+            ${analysis.verdict === 'BUY' ? '▲ MOMENTUM BUY' : '▼ TREND WEAKNESS'}
         </div>
     `;
     document.getElementById("resultsGrid").appendChild(card);
-}
-
-// Indicator Helpers
-function calculateEMA(data, period) {
-    const k = 2 / (period + 1);
-    let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
-    for (let i = period; i < data.length; i++) { ema = data[i] * k + ema * (1 - k); }
-    return ema;
-}
-
-function calculateRSI(prices) {
-    let gains = 0, losses = 0;
-    for (let i = prices.length - 14; i < prices.length; i++) {
-        let diff = prices[i] - prices[i-1];
-        if (diff > 0) gains += diff; else losses -= diff;
-    }
-    return 100 - (100 / (1 + (gains/Math.abs(losses))));
 }
 </script>
 </body>
