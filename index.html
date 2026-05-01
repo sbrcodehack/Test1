@@ -2,188 +2,119 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI India Trading Terminal</title>
+    <title>AI India Market Scanner</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background:#050505; color:#00ff00; text-align:center; padding: 20px; }
-        h1 { color: #fff; text-shadow: 0 0 15px #00ff00; margin-bottom: 10px; }
-        .container { display: flex; flex-direction: column; align-items: center; }
-        
-        /* Input Styling */
-        .controls { margin-bottom: 20px; background: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
-        input { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; text-align: center; }
-        button { background: #00ff00; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #00cc00; }
-
-        .card { 
-            border: 2px solid #00ff00; background: #111; padding: 30px; 
-            border-radius: 15px; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); width: 350px;
-        }
-        .stat { display: flex; justify-content: space-between; margin: 12px 0; border-bottom: 1px solid #222; padding-bottom: 5px; }
-        .label { color: #888; font-size: 0.9em; }
-        .value { font-family: 'Courier New', monospace; font-weight: bold; }
-        
-        #signal { font-size: 2em; margin-top: 20px; padding: 10px; border-radius: 8px; }
-        .buy { background: #004400; color: #00ff00; border: 1px solid #00ff00; }
-        .sell { background: #440000; color: #ff0000; border: 1px solid #ff0000; }
-        .hold { background: #444400; color: #ffff00; border: 1px solid #ffff00; }
-        .wait { background: #222; color: #888; border: 1px solid #444; }
-        .error-msg { color: #ff4444; font-size: 0.8em; margin-top: 10px; height: 20px; }
+        body { font-family: 'Segoe UI', sans-serif; background:#050505; color:#0f0; text-align:center; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; transition: 0.3s; }
+        .hot { border: 2px solid #0f0; box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); }
+        .btn-scan { background: #0f0; color: #000; padding: 15px 30px; border: none; font-size: 1.2em; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-scan:disabled { background: #444; cursor: not-allowed; }
+        .loading { font-size: 1.2em; color: yellow; margin: 20px; }
+        .signal-text { font-weight: bold; font-size: 1.1em; }
+        .buy { color: #0f0; }
+        .watch { color: #888; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>📊 AI INDIA TERMINAL</h1>
-        
-        <div class="controls">
-            <input type="text" id="symbolInput" placeholder="e.g. RELIANCE">
-            <button onclick="changeSymbol()">ANALYSIS</button>
-        </div>
+    <h1>🚀 AI INTRADAY SCANNER</h1>
+    <p>Targeting Nifty 50 & Budget Stocks for Tomorrow</p>
+    
+    <button class="btn-scan" id="scanBtn" onclick="runScanner()">START MARKET SCAN</button>
+    <div id="loader" class="loading" style="display:none;">Scanning Market (Respecting API Limits)...</div>
 
-        <div class="card">
-            <h2 id="displaySymbol">SELECT STOCK</h2>
-            
-            <div class="stat">
-                <span class="label">PRICE:</span>
-                <span id="price" class="value">--</span>
-            </div>
-            <div class="stat">
-                <span class="label">RSI:</span>
-                <span id="rsi" class="value">--</span>
-            </div>
-            <div class="stat">
-                <span class="label">EMA 9:</span>
-                <span id="ema9" class="value">--</span>
-            </div>
-            <div class="stat">
-                <span class="label">EMA 21:</span>
-                <span id="ema21" class="value">--</span>
-            </div>
-            <div class="stat">
-                <span class="label">VOL SPIKE:</span>
-                <span id="volume" class="value">--</span>
-            </div>
-
-            <div id="signal" class="wait">READY</div>
-            <div id="error-display" class="error-msg"></div>
-        </div>
-        
-        <p style="color: #444; font-size: 0.7em; margin-top:20px;">
-            Note: Using Daily Data for BSE/NSE Free Access
-        </p>
+    <div class="grid" id="resultsGrid">
+        <!-- Stock Cards Appear Here -->
     </div>
 
 <script>
-let API_KEY = "QTBO0G73GXOPLCW3";
-let currentSymbol = "RELIANCE.BSE"; 
+const API_KEY = "QTBO0G73GXOPLCW3";
+// Target List: Suzlon (Budget), IRFC (Budget), Tata Motors (Nifty), Zomato (Momentum), SBIN (Nifty)
+const STOCKS = ["SUZLON.BSE", "IRFC.BSE", "TATAMOTORS.BSE", "ZOMATO.BSE", "SBIN.BSE"];
 
-async function fetchData(symbol) {
-    // We use TIME_SERIES_DAILY because Daily is free for Indian stocks
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`;
+async function runScanner() {
+    const btn = document.getElementById("scanBtn");
+    const loader = document.getElementById("loader");
+    const grid = document.getElementById("resultsGrid");
     
-    try {
-        const res = await fetch(url);
-        const data = await res.json();
+    btn.disabled = true;
+    loader.style.display = "block";
+    grid.innerHTML = "";
 
-        if (data["Note"]) throw new Error("API Limit! Wait 1 min");
-        if (data["Error Message"]) throw new Error("Invalid Symbol (Try adding .BSE)");
-        
-        const series = data["Time Series (Daily)"];
-        if (!series) throw new Error("Data restricted or unavailable");
-
-        let prices = [];
-        let volumes = [];
-
-        for (let time in series) {
-            prices.push(parseFloat(series[time]["4. close"]));
-            volumes.push(parseFloat(series[time]["5. volume"]));
+    for (let i = 0; i < STOCKS.length; i++) {
+        const symbol = STOCKS[i];
+        try {
+            const data = await fetchStockData(symbol);
+            renderCard(symbol, data);
+        } catch (e) {
+            console.error(e);
         }
-
-        return { 
-            prices: prices.reverse(), 
-            volumes: volumes.reverse() 
-        };
-    } catch (err) {
-        document.getElementById("error-display").innerText = err.message;
-        throw err;
+        
+        // Wait 15 seconds between stocks to stay within Free API limit (5 calls/min)
+        if (i < STOCKS.length - 1) {
+            loader.innerText = `Analyzing ${STOCKS[i+1]}... (Cooldown Active)`;
+            await new Promise(r => setTimeout(r, 15000));
+        }
     }
+
+    loader.style.display = "none";
+    btn.disabled = false;
+    btn.innerText = "RESURVEY MARKET";
 }
 
-// Indicator Functions
+async function fetchStockData(symbol) {
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const series = json["Time Series (Daily)"];
+    
+    const dates = Object.keys(series).slice(0, 30);
+    const prices = dates.map(d => parseFloat(series[d]["4. close"])).reverse();
+    const volumes = dates.map(d => parseFloat(series[d]["5. volume"])).reverse();
+    
+    return { prices, volumes };
+}
+
+function renderCard(symbol, data) {
+    const prices = data.prices;
+    const currentPrice = prices[prices.length - 1];
+    const ema9 = calculateEMA(prices, 9);
+    const rsi = calculateRSI(prices);
+    
+    // Logic: Price > EMA9 and RSI is in "launch zone" (45-65)
+    const isHot = (currentPrice > ema9 && rsi > 45 && rsi < 65);
+    const signal = isHot ? "🔥 HIGH POTENTIAL" : "⏳ WATCHLIST";
+
+    const card = document.createElement("div");
+    card.className = `card ${isHot ? 'hot' : ''}`;
+    card.innerHTML = `
+        <h3>${symbol.split('.')[0]}</h3>
+        <p>Price: <strong>₹${currentPrice.toFixed(2)}</strong></p>
+        <p>RSI: ${rsi.toFixed(2)}</p>
+        <p>EMA 9: ₹${ema9.toFixed(2)}</p>
+        <hr style="border:0; border-top:1px solid #333">
+        <div class="signal-text ${isHot ? 'buy' : 'watch'}">${signal}</div>
+    `;
+    document.getElementById("resultsGrid").appendChild(card);
+}
+
+// Indicator Math
 function calculateEMA(data, period) {
-    if (data.length < period) return 0;
     const k = 2 / (period + 1);
     let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
-    for (let i = period; i < data.length; i++) {
-        ema = data[i] * k + ema * (1 - k);
-    }
+    for (let i = period; i < data.length; i++) { ema = data[i] * k + ema * (1 - k); }
     return ema;
 }
 
-function calculateRSI(prices, period = 14) {
-    if (prices.length <= period) return 50;
+function calculateRSI(prices) {
     let gains = 0, losses = 0;
-    for (let i = 1; i <= period; i++) {
-        let diff = prices[i] - prices[i - 1];
+    for (let i = prices.length - 14; i < prices.length; i++) {
+        let diff = prices[i] - prices[i-1];
         if (diff > 0) gains += diff; else losses -= diff;
     }
-    if (losses === 0) return 100;
-    let rs = gains / losses;
-    return 100 - (100 / (1 + rs));
+    return 100 - (100 / (1 + (gains/Math.abs(losses))));
 }
-
-async function updateBot() {
-    document.getElementById("error-display").innerText = "";
-    document.getElementById("signal").innerText = "ANALYZING...";
-    
-    try {
-        const data = await fetchData(currentSymbol);
-        const prices = data.prices;
-        
-        const ema9 = calculateEMA(prices, 9);
-        const ema21 = calculateEMA(prices, 21);
-        const rsi = calculateRSI(prices);
-        const currentPrice = prices[prices.length - 1];
-        
-        // Volume Spike Logic
-        const lastVol = data.volumes[data.volumes.length - 1];
-        const avgVol = data.volumes.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
-        const volSpike = lastVol > (avgVol * 1.5);
-
-        // Signal Logic
-        let signal = "HOLD";
-        if (ema9 > ema21 && rsi < 65) signal = "BUY";
-        else if (ema9 < ema21 && rsi > 35) signal = "SELL";
-
-        // Update UI - Using ₹ for Indian Stocks
-        document.getElementById("displaySymbol").innerText = currentSymbol.replace(".BSE", "");
-        document.getElementById("price").innerText = "₹" + currentPrice.toLocaleString('en-IN');
-        document.getElementById("rsi").innerText = rsi.toFixed(2);
-        document.getElementById("ema9").innerText = "₹" + ema9.toFixed(2);
-        document.getElementById("ema21").innerText = "₹" + ema21.toFixed(2);
-        document.getElementById("volume").innerText = volSpike ? "YES 🔥" : "NO";
-
-        const sigEl = document.getElementById("signal");
-        sigEl.innerText = signal;
-        sigEl.className = signal.toLowerCase();
-
-    } catch (err) {
-        document.getElementById("signal").innerText = "OFFLINE";
-        document.getElementById("signal").className = "wait";
-    }
-}
-
-function changeSymbol() {
-    let input = document.getElementById("symbolInput").value.toUpperCase();
-    if (input) {
-        // Auto-append .BSE if the user didn't specify
-        currentSymbol = input.includes(".") ? input : input + ".BSE";
-        updateBot();
-    }
-}
-
-// Initial Run
-updateBot();
 </script>
 </body>
 </html>
