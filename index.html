@@ -1,2 +1,99 @@
-<h1>arman</h1>
-<h2>arhan</h2>
+
+const API_KEY = "QTBO0G73GXOPLCW3";
+const SYMBOL = "RELIANCE.BSE"; // try also TCS.BSE, INFY.BSE
+
+// ===== FETCH LIVE DATA =====
+async function fetchData() {
+    let url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=5min&apikey=${API_KEY}`;
+    let res = await fetch(url);
+    let data = await res.json();
+
+    let series = data["Time Series (5min)"];
+    let prices = [];
+    let volume = [];
+
+    for (let time in series) {
+        prices.push(parseFloat(series[time]["4. close"]));
+        volume.push(parseFloat(series[time]["5. volume"]));
+    }
+
+    prices.reverse();
+    volume.reverse();
+
+    return { prices, volume };
+}
+
+// ===== EMA =====
+function EMA(prices, period) {
+    let k = 2/(period+1);
+    let ema = prices.slice(0, period).reduce((a,b)=>a+b)/period;
+
+    for(let i=period;i<prices.length;i++){
+        ema = prices[i]*k + ema*(1-k);
+    }
+    return ema;
+}
+
+// ===== RSI =====
+function RSI(prices, period=14){
+    let gain=0, loss=0;
+    for(let i=1;i<=period;i++){
+        let diff = prices[i]-prices[i-1];
+        if(diff>0) gain+=diff;
+        else loss-=diff;
+    }
+    if(loss===0) return 100;
+    let rs = gain/loss;
+    return 100-(100/(1+rs));
+}
+
+// ===== Volume Spike =====
+function volumeSpike(vol){
+    let avg = vol.slice(0,-1).reduce((a,b)=>a+b)/(vol.length-1);
+    return vol[vol.length-1] > avg*1.5;
+}
+
+// ===== SIGNAL =====
+function getSignal(prices, volume){
+    let ema9 = EMA(prices,9);
+    let ema21 = EMA(prices,21);
+    let rsi = RSI(prices);
+    let vol = volumeSpike(volume);
+
+    let signal = "HOLD";
+    if(ema9>ema21 && rsi<60 && vol) signal="BUY";
+    else if(ema9<ema21 && rsi>40 && vol) signal="SELL";
+
+    return { ema9, ema21, rsi, vol, signal };
+}
+
+// ===== UI =====
+function updateUI(res, price){
+    document.getElementById("symbol").innerText = SYMBOL;
+    document.getElementById("price").innerText = price.toFixed(2);
+    document.getElementById("rsi").innerText = res.rsi.toFixed(2);
+    document.getElementById("ema9").innerText = res.ema9.toFixed(2);
+    document.getElementById("ema21").innerText = res.ema21.toFixed(2);
+    document.getElementById("volume").innerText = res.vol ? "YES" : "NO";
+
+    let el = document.getElementById("signal");
+    el.innerText = "Signal: " + res.signal;
+    el.className = res.signal.toLowerCase();
+}
+
+// ===== MAIN =====
+async function run(){
+    try {
+        let data = await fetchData();
+        let result = getSignal(data.prices, data.volume);
+        let lastPrice = data.prices[data.prices.length-1];
+
+        updateUI(result, lastPrice);
+    } catch(e){
+        console.log("Error:", e);
+    }
+}
+
+// refresh every 1 min (API limit safe)
+setInterval(run, 60000);
+run();
