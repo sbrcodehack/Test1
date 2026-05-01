@@ -73,9 +73,8 @@ const API_KEY = "QTBO0G73GXOPLCW3";
 const SYMBOL = "TSLA"; 
 
 // ===== FETCH DATA =====
-async function fetchData() {
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=5min&apikey=${API_KEY}`;
-    
+async function fetchData() {    
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${SYMBOL}&apikey=${API_KEY}`;
     try {
         const res = await fetch(url);
         const data = await res.json();
@@ -91,7 +90,7 @@ async function fetchData() {
         // 3. Check for invalid symbols
         if (data["Error Message"]) throw new Error("Invalid Symbol Name");
 
-        const series = data["Time Series (5min)"];
+        const series = data["Time Series (Daily)"]; // Changed from "Time Series (5min)"
         if (!series) throw new Error("Market Data Currently Unavailable");
 
         let prices = [];
