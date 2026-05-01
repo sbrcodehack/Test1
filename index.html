@@ -101,30 +101,33 @@ async function runYahooScanner() {
 }
 
 async function fetchYahooData(symbol) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo`;
+    // AllOrigins is a reliable proxy that doesn't require manual activation
+    const proxy = "https://api.allorigins.win/get?url=";
+    const targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo`);
     
     try {
-        const response = await fetch(url);
+        addLog(`Fetching ${symbol} via AllOrigins...`, "info");
         
-        if (!response.ok) {
-            throw new Error(`HTTP Status ${response.status}`);
-        }
+        const response = await fetch(`${proxy}${targetUrl}`);
+        
+        if (!response.ok) throw new Error(`Proxy Error: ${response.status}`);
 
-        const data = await response.json();
+        const wrapper = await response.json(); // AllOrigins wraps the response
+        const data = JSON.parse(wrapper.contents); // We must parse the inner string
         
         if (!data.chart || !data.chart.result) {
-            throw new Error("Malformed JSON response from Yahoo.");
+            throw new Error("Invalid Yahoo data format.");
         }
 
         const result = data.chart.result[0].indicators.quote[0].close.filter(p => p != null);
-        addLog(`Successfully retrieved ${result.length} price points for ${symbol}`, "success");
+        addLog(`Success! Found ${result.length} price points for ${symbol}`, "success");
         return result;
 
     } catch (err) {
-        if (err.message.includes('Failed to fetch')) {
-            addLog(`CORS Error: Access to Yahoo is blocked. Open the file via a Web Server (Live Server) or use a Proxy.`, "error");
-        } else {
-            addLog(`Fetch Error: ${err.message}`, "error");
+        addLog(`Critical Trace: ${err.message}`, "error");
+        // Log a more helpful hint for your video viewers
+        if (err.message.includes("Unexpected token")) {
+            addLog("Hint: Yahoo is throttling requests. Wait 60 seconds and try again.", "warn");
         }
         return null;
     }
