@@ -2,38 +2,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI India Market Scanner</title>
+    <title>AI Dynamic Momentum Scanner</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background:#050505; color:#0f0; text-align:center; padding: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
-        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; transition: 0.3s; }
-        .hot { border: 2px solid #0f0; box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 10px; }
+        .buy-zone { border: 2px solid #0f0; box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); }
+        .sell-zone { border: 2px solid #ff4444; box-shadow: 0 0 10px rgba(255, 68, 68, 0.3); }
         .btn-scan { background: #0f0; color: #000; padding: 15px 30px; border: none; font-size: 1.2em; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .btn-scan:disabled { background: #444; cursor: not-allowed; }
-        .loading { font-size: 1.2em; color: yellow; margin: 20px; }
-        .signal-text { font-weight: bold; font-size: 1.1em; }
-        .buy { color: #0f0; }
-        .watch { color: #888; }
+        .loading { font-size: 1.1em; color: yellow; margin: 20px; }
+        .summary { margin: 20px auto; max-width: 400px; background: #181818; padding: 10px; border-radius: 8px; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
-    <h1>🚀 AI INTRADAY SCANNER</h1>
-    <p>Targeting Nifty 50 & Budget Stocks for Tomorrow</p>
+    <h1>🚀 DYNAMIC AI STOCK PICKER</h1>
+    <p>Scanning Nifty 50 & High-Volume Midcaps for Momentum</p>
     
-    <button class="btn-scan" id="scanBtn" onclick="runScanner()">START MARKET SCAN</button>
-    <div id="loader" class="loading" style="display:none;">Scanning Market (Respecting API Limits)...</div>
+    <button class="btn-scan" id="scanBtn" onclick="runDynamicScanner()">FIND TOP 5 POTENTIAL STOCKS</button>
+    <div id="loader" class="loading" style="display:none;">Analyzing market trends...</div>
 
-    <div class="grid" id="resultsGrid">
-        <!-- Stock Cards Appear Here -->
+    <div id="summaryBox" class="summary" style="display:none;">
+        <strong>Market Sentiment:</strong> <span id="marketVerdict">--</span>
     </div>
 
-<script>
-const API_KEY = "QTBO0G73GXOPLCW3";
-// Target List: Suzlon (Budget), IRFC (Budget), Tata Motors (Nifty), Zomato (Momentum), SBIN (Nifty)
-const STOCKS = ["SUZLON.BSE", "IRFC.BSE", "TATAMOTORS.BSE", "ZOMATO.BSE", "SBIN.BSE"];
+    <div class="grid" id="resultsGrid"></div>
 
-async function runScanner() {
+<script>
+const API_KEY = "QTBO0G73GXOPLCW3"; // Use your AlphaVantage Key
+// The "Pool" to scan from dynamically
+const STOCK_POOL = [
+    "RELIANCE.BSE", "TATASTEEL.BSE", "HDFCBANK.BSE", "INFY.BSE", 
+    "ITC.BSE", "SBIN.BSE", "BHARTIARTL.BSE", "ICICIBANK.BSE", 
+    "TATAMOTORS.BSE", "WIPRO.BSE", "ONGC.BSE", "ADANIPORTS.BSE"
+];
+
+async function runDynamicScanner() {
     const btn = document.getElementById("scanBtn");
     const loader = document.getElementById("loader");
     const grid = document.getElementById("resultsGrid");
@@ -41,65 +45,77 @@ async function runScanner() {
     btn.disabled = true;
     loader.style.display = "block";
     grid.innerHTML = "";
+    
+    let picksFound = 0;
 
-    for (let i = 0; i < STOCKS.length; i++) {
-        const symbol = STOCKS[i];
+    for (const symbol of STOCK_POOL) {
+        if (picksFound >= 5) break; // Stop once we find our top 5
+
         try {
             const data = await fetchStockData(symbol);
-            renderCard(symbol, data);
-        } catch (e) {
-            console.error(e);
-        }
-        
-        // Wait 15 seconds between stocks to stay within Free API limit (5 calls/min)
-        if (i < STOCKS.length - 1) {
-            loader.innerText = `Analyzing ${STOCKS[i+1]}... (Cooldown Active)`;
-            await new Promise(r => setTimeout(r, 15000));
-        }
+            const analysis = analyzeStock(symbol, data);
+            
+            // LEGIT CONDITION: Only show the stock if it's "Buy" or "Sell" (Significant Action)
+            if (analysis.isLegit) {
+                renderCard(symbol, analysis);
+                picksFound++;
+            }
+        } catch (e) { console.error(e); }
+
+        // API Limit protection
+        await new Promise(r => setTimeout(r, 12000));
+        loader.innerText = `Found ${picksFound}/5 stocks. Scanning next...`;
     }
 
     loader.style.display = "none";
     btn.disabled = false;
-    btn.innerText = "RESURVEY MARKET";
+    document.getElementById("summaryBox").style.display = "block";
+    document.getElementById("marketVerdict").innerText = picksFound > 0 ? "Opportunities Found" : "Market Neutral";
 }
 
 async function fetchStockData(symbol) {
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`);
     const json = await res.json();
     const series = json["Time Series (Daily)"];
-    
     const dates = Object.keys(series).slice(0, 30);
-    const prices = dates.map(d => parseFloat(series[d]["4. close"])).reverse();
-    const volumes = dates.map(d => parseFloat(series[d]["5. volume"])).reverse();
-    
-    return { prices, volumes };
+    return dates.map(d => parseFloat(series[d]["4. close"])).reverse();
 }
 
-function renderCard(symbol, data) {
-    const prices = data.prices;
+function analyzeStock(symbol, prices) {
     const currentPrice = prices[prices.length - 1];
     const ema9 = calculateEMA(prices, 9);
     const rsi = calculateRSI(prices);
     
-    // Logic: Price > EMA9 and RSI is in "launch zone" (45-65)
-    const isHot = (currentPrice > ema9 && rsi > 45 && rsi < 65);
-    const signal = isHot ? "🔥 HIGH POTENTIAL" : "⏳ WATCHLIST";
+    let verdict = "NEUTRAL";
+    let isLegit = false;
 
+    if (rsi > 75) {
+        verdict = "SELL";
+        isLegit = true; // Overheated is a legit signal to act
+    } else if (currentPrice > ema9 && rsi > 48 && rsi < 62) {
+        verdict = "BUY";
+        isLegit = true; // Strong momentum breakout is a legit signal
+    }
+
+    return { currentPrice, ema9, rsi, verdict, isLegit };
+}
+
+function renderCard(symbol, analysis) {
     const card = document.createElement("div");
-    card.className = `card ${isHot ? 'hot' : ''}`;
+    card.className = `card ${analysis.verdict === 'BUY' ? 'buy-zone' : 'sell-zone'}`;
     card.innerHTML = `
         <h3>${symbol.split('.')[0]}</h3>
-        <p>Price: <strong>₹${currentPrice.toFixed(2)}</strong></p>
-        <p>RSI: ${rsi.toFixed(2)}</p>
-        <p>EMA 9: ₹${ema9.toFixed(2)}</p>
-        <hr style="border:0; border-top:1px solid #333">
-        <div class="signal-text ${isHot ? 'buy' : 'watch'}">${signal}</div>
+        <p>Price: ₹${analysis.currentPrice.toFixed(2)}</p>
+        <small>RSI: ${analysis.rsi.toFixed(2)} | EMA9: ${analysis.ema9.toFixed(2)}</small>
+        <hr style="border:0; border-top:1px solid #333; margin:10px 0;">
+        <div style="font-weight:bold; color:${analysis.verdict === 'BUY' ? '#0f0' : '#f44'}">
+            ${analysis.verdict === 'BUY' ? '🔥 POTENTIAL BUY' : '⚠️ EXIT/SELL'}
+        </div>
     `;
     document.getElementById("resultsGrid").appendChild(card);
 }
 
-// Indicator Math
+// Indicator Helpers
 function calculateEMA(data, period) {
     const k = 2 / (period + 1);
     let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
