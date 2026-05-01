@@ -2,45 +2,53 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Intraday Trading Bot - Live</title>
+    <title>AI India Trading Terminal</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#0a0a0a; color:#00ff00; text-align:center; margin: 0; padding: 20px; }
-        h1 { color: #fff; text-shadow: 0 0 10px #00ff00; }
+        body { font-family: 'Segoe UI', sans-serif; background:#050505; color:#00ff00; text-align:center; padding: 20px; }
+        h1 { color: #fff; text-shadow: 0 0 15px #00ff00; margin-bottom: 10px; }
         .container { display: flex; flex-direction: column; align-items: center; }
+        
+        /* Input Styling */
+        .controls { margin-bottom: 20px; background: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+        input { background: #000; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; text-align: center; }
+        button { background: #00ff00; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #00cc00; }
+
         .card { 
-            border: 2px solid #00ff00; 
-            background: #111;
-            padding: 30px; 
-            margin: 20px; 
-            border-radius: 15px; 
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
-            width: 350px;
+            border: 2px solid #00ff00; background: #111; padding: 30px; 
+            border-radius: 15px; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); width: 350px;
         }
-        .stat { display: flex; justify-content: space-between; margin: 10px 0; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .stat { display: flex; justify-content: space-between; margin: 12px 0; border-bottom: 1px solid #222; padding-bottom: 5px; }
         .label { color: #888; font-size: 0.9em; }
         .value { font-family: 'Courier New', monospace; font-weight: bold; }
+        
         #signal { font-size: 2em; margin-top: 20px; padding: 10px; border-radius: 8px; }
         .buy { background: #004400; color: #00ff00; border: 1px solid #00ff00; }
         .sell { background: #440000; color: #ff0000; border: 1px solid #ff0000; }
         .hold { background: #444400; color: #ffff00; border: 1px solid #ffff00; }
         .wait { background: #222; color: #888; border: 1px solid #444; }
-        .error-msg { color: #ff4444; font-size: 0.8em; margin-top: 10px; }
+        .error-msg { color: #ff4444; font-size: 0.8em; margin-top: 10px; height: 20px; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>📊 AI TRADING TERMINAL</h1>
+        <h1>📊 AI INDIA TERMINAL</h1>
         
+        <div class="controls">
+            <input type="text" id="symbolInput" placeholder="e.g. RELIANCE">
+            <button onclick="changeSymbol()">ANALYSIS</button>
+        </div>
+
         <div class="card">
-            <h2 id="symbol">INITIALIZING...</h2>
+            <h2 id="displaySymbol">SELECT STOCK</h2>
             
             <div class="stat">
-                <span class="label">LAST PRICE:</span>
+                <span class="label">PRICE:</span>
                 <span id="price" class="value">--</span>
             </div>
             <div class="stat">
-                <span class="label">RSI (14):</span>
+                <span class="label">RSI:</span>
                 <span id="rsi" class="value">--</span>
             </div>
             <div class="stat">
@@ -56,42 +64,32 @@
                 <span id="volume" class="value">--</span>
             </div>
 
-            <div id="signal" class="wait">WAITING</div>
+            <div id="signal" class="wait">READY</div>
             <div id="error-display" class="error-msg"></div>
         </div>
         
-        <p style="color: #444; font-size: 0.7em;">Auto-refreshing every 60 seconds</p>
+        <p style="color: #444; font-size: 0.7em; margin-top:20px;">
+            Note: Using Daily Data for BSE/NSE Free Access
+        </p>
     </div>
 
 <script>
-/** 
- * CONFIGURATION 
- * Note: Use 'TSLA', 'AAPL', or 'IBM' for free intraday testing.
- * Indian stocks (e.g. 'RELIANCE.BSE') require Alpha Vantage Premium.
- */
-const API_KEY = "QTBO0G73GXOPLCW3";
-const SYMBOL = "TSLA"; 
+let API_KEY = "QTBO0G73GXOPLCW3";
+let currentSymbol = "RELIANCE.BSE"; 
 
-// ===== FETCH DATA =====
-async function fetchData() {    
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${SYMBOL}&apikey=${API_KEY}`;
+async function fetchData(symbol) {
+    // We use TIME_SERIES_DAILY because Daily is free for Indian stocks
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}`;
+    
     try {
         const res = await fetch(url);
         const data = await res.json();
 
-        // 1. Check for API Limits
-        if (data["Note"]) throw new Error("API Limit Reached (Wait 1 min)");
+        if (data["Note"]) throw new Error("API Limit! Wait 1 min");
+        if (data["Error Message"]) throw new Error("Invalid Symbol (Try adding .BSE)");
         
-        // 2. Check for Premium restriction (Common for Indian Stocks)
-        if (data["Information"] && data["Information"].includes("premium")) {
-            throw new Error("Premium Required for this Symbol");
-        }
-
-        // 3. Check for invalid symbols
-        if (data["Error Message"]) throw new Error("Invalid Symbol Name");
-
-        const series = data["Time Series (Daily)"]; // Changed from "Time Series (5min)"
-        if (!series) throw new Error("Market Data Currently Unavailable");
+        const series = data["Time Series (Daily)"];
+        if (!series) throw new Error("Data restricted or unavailable");
 
         let prices = [];
         let volumes = [];
@@ -101,23 +99,20 @@ async function fetchData() {
             volumes.push(parseFloat(series[time]["5. volume"]));
         }
 
-        // Reverse to get chronological order (oldest to newest)
         return { 
             prices: prices.reverse(), 
             volumes: volumes.reverse() 
         };
-
     } catch (err) {
         document.getElementById("error-display").innerText = err.message;
         throw err;
     }
 }
 
-// ===== CALCULATIONS =====
+// Indicator Functions
 function calculateEMA(data, period) {
     if (data.length < period) return 0;
     const k = 2 / (period + 1);
-    // Fixed: Added initial value 0 to prevent reduce error
     let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
     for (let i = period; i < data.length; i++) {
         ema = data[i] * k + ema * (1 - k);
@@ -137,40 +132,35 @@ function calculateRSI(prices, period = 14) {
     return 100 - (100 / (1 + rs));
 }
 
-function isVolumeSpiking(vol) {
-    if (vol.length < 5) return false;
-    const lastVol = vol[vol.length - 1];
-    const avgVol = vol.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
-    return lastVol > (avgVol * 1.5);
-}
-
-// ===== LOGIC & UI =====
 async function updateBot() {
-    document.getElementById("error-display").innerText = ""; // Clear errors
+    document.getElementById("error-display").innerText = "";
+    document.getElementById("signal").innerText = "ANALYZING...";
     
     try {
-        const data = await fetchData();
+        const data = await fetchData(currentSymbol);
         const prices = data.prices;
-        const volumes = data.volumes;
-
-        // Calculate Indicators
+        
         const ema9 = calculateEMA(prices, 9);
         const ema21 = calculateEMA(prices, 21);
         const rsi = calculateRSI(prices);
-        const volSpike = isVolumeSpiking(volumes);
         const currentPrice = prices[prices.length - 1];
+        
+        // Volume Spike Logic
+        const lastVol = data.volumes[data.volumes.length - 1];
+        const avgVol = data.volumes.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
+        const volSpike = lastVol > (avgVol * 1.5);
 
-        // Determine Signal
+        // Signal Logic
         let signal = "HOLD";
-        if (ema9 > ema21 && rsi < 65 && volSpike) signal = "BUY";
-        else if (ema9 < ema21 && rsi > 35 && volSpike) signal = "SELL";
+        if (ema9 > ema21 && rsi < 65) signal = "BUY";
+        else if (ema9 < ema21 && rsi > 35) signal = "SELL";
 
-        // Update UI
-        document.getElementById("symbol").innerText = SYMBOL;
-        document.getElementById("price").innerText = "$" + currentPrice.toFixed(2);
+        // Update UI - Using ₹ for Indian Stocks
+        document.getElementById("displaySymbol").innerText = currentSymbol.replace(".BSE", "");
+        document.getElementById("price").innerText = "₹" + currentPrice.toLocaleString('en-IN');
         document.getElementById("rsi").innerText = rsi.toFixed(2);
-        document.getElementById("ema9").innerText = ema9.toFixed(2);
-        document.getElementById("ema21").innerText = ema21.toFixed(2);
+        document.getElementById("ema9").innerText = "₹" + ema9.toFixed(2);
+        document.getElementById("ema21").innerText = "₹" + ema21.toFixed(2);
         document.getElementById("volume").innerText = volSpike ? "YES 🔥" : "NO";
 
         const sigEl = document.getElementById("signal");
@@ -178,16 +168,22 @@ async function updateBot() {
         sigEl.className = signal.toLowerCase();
 
     } catch (err) {
-        console.error("Bot Error:", err);
-        document.getElementById("signal").innerText = "ERROR";
+        document.getElementById("signal").innerText = "OFFLINE";
         document.getElementById("signal").className = "wait";
     }
 }
 
-// Start
-updateBot();
-setInterval(updateBot, 60000); // 1 minute refresh cycle
+function changeSymbol() {
+    let input = document.getElementById("symbolInput").value.toUpperCase();
+    if (input) {
+        // Auto-append .BSE if the user didn't specify
+        currentSymbol = input.includes(".") ? input : input + ".BSE";
+        updateBot();
+    }
+}
 
+// Initial Run
+updateBot();
 </script>
 </body>
 </html>
