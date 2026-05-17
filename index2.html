@@ -19,29 +19,30 @@
 async function loadGold() {
 
   const proxy = "https://api.allorigins.win/raw?url=";
-
-  const yahooUrl =
-    "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=2d&interval=1d";
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=3d&interval=1d";
 
   try {
-
-    const res = await fetch(proxy + encodeURIComponent(yahooUrl));
+    const res = await fetch(proxy + encodeURIComponent(url));
     const data = await res.json();
 
-    const prices =
+    const closes =
       data.chart.result[0].indicators.quote[0].close;
 
-    const yesterdayUSD = prices[0];
-    const todayUSD = prices[1];
+    // 🔥 Filter valid prices only
+    const validPrices = closes.filter(x => x !== null);
+
+    if (validPrices.length < 2) {
+      throw "Not enough data";
+    }
+
+    const yesterdayUSD = validPrices[validPrices.length - 2];
+    const todayUSD = validPrices[validPrices.length - 1];
 
     const usdToInr = 83;
     const ounceToGram = 31.1035;
 
-    const today =
-      (todayUSD * usdToInr) / ounceToGram;
-
-    const yesterday =
-      (yesterdayUSD * usdToInr) / ounceToGram;
+    const today = (todayUSD * usdToInr) / ounceToGram;
+    const yesterday = (yesterdayUSD * usdToInr) / ounceToGram;
 
     const diff = today - yesterday;
     const percent = (diff / yesterday) * 100;
@@ -52,14 +53,19 @@ async function loadGold() {
     document.getElementById("yesterday").innerHTML =
       "₹ " + yesterday.toFixed(2) + " / gram";
 
-    document.getElementById("change").innerHTML =
+    const changeEl = document.getElementById("change");
+
+    changeEl.innerHTML =
       (diff >= 0 ? "▲ " : "▼ ") +
       diff.toFixed(2) +
       " (" + percent.toFixed(2) + "%)";
 
+    changeEl.style.color =
+      diff >= 0 ? "#00ff99" : "#ff4d4d";
+
   } catch (e) {
     document.getElementById("current").innerText =
-      "Still blocked 😅";
+      "Data unavailable";
     console.log(e);
   }
 }
