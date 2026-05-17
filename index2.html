@@ -1,76 +1,190 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gold Price India</title>
-</head>
-<body style="background:#111;color:white;text-align:center;font-family:Arial">
+  <title>MCX Gold India</title>
 
-<h2>Gold Price (India)</h2>
-
-<div>Current Price</div>
-<div id="current">Loading...</div>
-
-<div>Yesterday Close</div>
-<div id="yesterday">Loading...</div>
-
-<div id="change"></div>
-
-<script>
-async function loadGold() {
-
-  const proxy = "https://api.allorigins.win/raw?url=";
-  const url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=3d&interval=1d";
-
-  try {
-    const res = await fetch(proxy + encodeURIComponent(url));
-    const data = await res.json();
-
-    const closes =
-      data.chart.result[0].indicators.quote[0].close;
-
-    // 🔥 Filter valid prices only
-    const validPrices = closes.filter(x => x !== null);
-
-    if (validPrices.length < 2) {
-      throw "Not enough data";
+  <style>
+    body{
+      background:#0f1117;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding-top:40px;
     }
 
-    const yesterdayUSD = validPrices[validPrices.length - 2];
-    const todayUSD = validPrices[validPrices.length - 1];
+    .card{
+      width:340px;
+      margin:auto;
+      background:#1c1f26;
+      padding:25px;
+      border-radius:14px;
+      box-shadow:0 0 15px rgba(0,0,0,0.4);
+    }
 
-    const usdToInr = 83;
+    .price{
+      font-size:30px;
+      margin:10px 0;
+      font-weight:bold;
+    }
+
+    .green{
+      color:#00e676;
+    }
+
+    .red{
+      color:#ff5252;
+    }
+
+    .small{
+      color:#aaa;
+      margin-top:8px;
+      font-size:14px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <h2>🇮🇳 MCX Gold Estimate</h2>
+
+  <div class="small">24K Estimated Retail</div>
+
+  <div id="current" class="price">
+    Loading...
+  </div>
+
+  <div class="small">
+    Yesterday Close
+  </div>
+
+  <div id="yesterday" class="price">
+    Loading...
+  </div>
+
+  <div id="change"></div>
+
+</div>
+
+<script>
+
+async function getJson(url){
+
+  const proxy =
+    "https://api.allorigins.win/raw?url=";
+
+  const res =
+    await fetch(proxy + encodeURIComponent(url));
+
+  return await res.json();
+}
+
+async function loadGold(){
+
+  try{
+
+    // GOLD FUTURES
+    const gold =
+      await getJson(
+        "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=3d&interval=1d"
+      );
+
+    // USD INR
+    const forex =
+      await getJson(
+        "https://query1.finance.yahoo.com/v8/finance/chart/INR=X?range=1d&interval=1d"
+      );
+
+    // GOLD CLOSES
+    const closes =
+      gold.chart.result[0]
+      .indicators.quote[0].close
+      .filter(x => x !== null);
+
+    const yesterdayUSD =
+      closes[closes.length - 2];
+
+    const todayUSD =
+      closes[closes.length - 1];
+
+    // LIVE USDINR
+    const usdInr =
+      forex.chart.result[0]
+      .meta.regularMarketPrice;
+
+    // ounce -> gram
     const ounceToGram = 31.1035;
 
-    const today = (todayUSD * usdToInr) / ounceToGram;
-    const yesterday = (yesterdayUSD * usdToInr) / ounceToGram;
+    // INTERNATIONAL BASE
+    const todayBase =
+      (todayUSD * usdInr) / ounceToGram;
 
-    const diff = today - yesterday;
-    const percent = (diff / yesterday) * 100;
+    const yesterdayBase =
+      (yesterdayUSD * usdInr) / ounceToGram;
 
-    document.getElementById("current").innerHTML =
+    // INDIA ADJUSTMENTS
+    const importDuty = 0.15;
+    const agriCess = 0.025;
+    const gst = 0.03;
+
+    // realistic dealer premium
+    const premium = 180;
+
+    function indiaPrice(base){
+
+      return (
+        base *
+        (1 + importDuty + agriCess) *
+        (1 + gst)
+      ) + premium;
+    }
+
+    const today =
+      indiaPrice(todayBase);
+
+    const yesterday =
+      indiaPrice(yesterdayBase);
+
+    const diff =
+      today - yesterday;
+
+    const percent =
+      (diff / yesterday) * 100;
+
+    document.getElementById("current")
+      .innerHTML =
       "₹ " + today.toFixed(2) + " / gram";
 
-    document.getElementById("yesterday").innerHTML =
+    document.getElementById("yesterday")
+      .innerHTML =
       "₹ " + yesterday.toFixed(2) + " / gram";
 
-    const changeEl = document.getElementById("change");
+    const changeEl =
+      document.getElementById("change");
 
     changeEl.innerHTML =
-      (diff >= 0 ? "▲ " : "▼ ") +
-      diff.toFixed(2) +
-      " (" + percent.toFixed(2) + "%)";
+      (diff >= 0 ? "▲ " : "▼ ")
+      + diff.toFixed(2)
+      + " ("
+      + percent.toFixed(2)
+      + "%)";
 
-    changeEl.style.color =
-      diff >= 0 ? "#00ff99" : "#ff4d4d";
+    changeEl.className =
+      diff >= 0 ? "green" : "red";
 
-  } catch (e) {
-    document.getElementById("current").innerText =
-      "Data unavailable";
+  }
+  catch(e){
+
     console.log(e);
+
+    document.getElementById("current")
+      .innerHTML =
+      "Failed to load";
   }
 }
 
 loadGold();
+
 </script>
 
 </body>
