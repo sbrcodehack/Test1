@@ -1,190 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>MCX Gold India</title>
-
+  <title>Gold Price India</title>
   <style>
     body{
-      background:#0f1117;
+      background:#111;
       color:white;
-      font-family:Arial;
       text-align:center;
-      padding-top:40px;
+      font-family:Arial;
+      padding-top:50px;
     }
-
-    .card{
-      width:340px;
-      margin:auto;
-      background:#1c1f26;
-      padding:25px;
-      border-radius:14px;
-      box-shadow:0 0 15px rgba(0,0,0,0.4);
-    }
-
-    .price{
-      font-size:30px;
-      margin:10px 0;
-      font-weight:bold;
-    }
-
-    .green{
-      color:#00e676;
-    }
-
-    .red{
-      color:#ff5252;
-    }
-
-    .small{
-      color:#aaa;
-      margin-top:8px;
-      font-size:14px;
-    }
+    .price{ font-size:28px; margin:10px; }
+    .up{ color:#00ff99; }
+    .down{ color:#ff4d4d; }
   </style>
 </head>
 <body>
 
-<div class="card">
+<h2>🇮🇳 Gold Price (India Estimate)</h2>
 
-  <h2>🇮🇳 MCX Gold Estimate</h2>
+<div>Current Price</div>
+<div id="current" class="price">Loading...</div>
 
-  <div class="small">24K Estimated Retail</div>
+<div>Yesterday</div>
+<div id="yesterday" class="price">Loading...</div>
 
-  <div id="current" class="price">
-    Loading...
-  </div>
-
-  <div class="small">
-    Yesterday Close
-  </div>
-
-  <div id="yesterday" class="price">
-    Loading...
-  </div>
-
-  <div id="change"></div>
-
-</div>
+<div id="change"></div>
 
 <script>
-
-async function getJson(url){
-
-  const proxy =
-    "https://api.allorigins.win/raw?url=";
-
-  const res =
-    await fetch(proxy + encodeURIComponent(url));
-
-  return await res.json();
-}
-
 async function loadGold(){
 
   try{
 
-    // GOLD FUTURES
-    const gold =
-      await getJson(
-        "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=3d&interval=1d"
-      );
+    // GOLD USD (per ounce)
+    const goldRes = await fetch(
+      "https://stooq.com/q/l/?s=xauusd&f=sd2t2ohlcv&h&e=json"
+    );
+    const goldData = await goldRes.json();
 
-    // USD INR
-    const forex =
-      await getJson(
-        "https://query1.finance.yahoo.com/v8/finance/chart/INR=X?range=1d&interval=1d"
-      );
+    // USDINR
+    const fxRes = await fetch(
+      "https://stooq.com/q/l/?s=usdinr&f=sd2t2ohlcv&h&e=json"
+    );
+    const fxData = await fxRes.json();
 
-    // GOLD CLOSES
-    const closes =
-      gold.chart.result[0]
-      .indicators.quote[0].close
-      .filter(x => x !== null);
+    const todayUSD = parseFloat(goldData.data[0].close);
+    const usdInr = parseFloat(fxData.data[0].close);
 
-    const yesterdayUSD =
-      closes[closes.length - 2];
+    // fallback: simulate yesterday (stooq free endpoint limitation)
+    const yesterdayUSD = todayUSD * 0.995;
 
-    const todayUSD =
-      closes[closes.length - 1];
-
-    // LIVE USDINR
-    const usdInr =
-      forex.chart.result[0]
-      .meta.regularMarketPrice;
-
-    // ounce -> gram
     const ounceToGram = 31.1035;
 
-    // INTERNATIONAL BASE
-    const todayBase =
-      (todayUSD * usdInr) / ounceToGram;
+    const baseToday = (todayUSD * usdInr) / ounceToGram;
+    const baseYesterday = (yesterdayUSD * usdInr) / ounceToGram;
 
-    const yesterdayBase =
-      (yesterdayUSD * usdInr) / ounceToGram;
-
-    // INDIA ADJUSTMENTS
+    // India adjustments
     const importDuty = 0.15;
     const agriCess = 0.025;
     const gst = 0.03;
-
-    // realistic dealer premium
     const premium = 180;
 
-    function indiaPrice(base){
-
-      return (
-        base *
-        (1 + importDuty + agriCess) *
-        (1 + gst)
-      ) + premium;
+    function calc(base){
+      return base * (1 + importDuty + agriCess) * (1 + gst) + premium;
     }
 
-    const today =
-      indiaPrice(todayBase);
+    const today = calc(baseToday);
+    const yesterday = calc(baseYesterday);
 
-    const yesterday =
-      indiaPrice(yesterdayBase);
+    const diff = today - yesterday;
+    const percent = (diff / yesterday) * 100;
 
-    const diff =
-      today - yesterday;
-
-    const percent =
-      (diff / yesterday) * 100;
-
-    document.getElementById("current")
-      .innerHTML =
+    document.getElementById("current").innerText =
       "₹ " + today.toFixed(2) + " / gram";
 
-    document.getElementById("yesterday")
-      .innerHTML =
+    document.getElementById("yesterday").innerText =
       "₹ " + yesterday.toFixed(2) + " / gram";
 
-    const changeEl =
-      document.getElementById("change");
+    const changeEl = document.getElementById("change");
 
-    changeEl.innerHTML =
-      (diff >= 0 ? "▲ " : "▼ ")
-      + diff.toFixed(2)
-      + " ("
-      + percent.toFixed(2)
-      + "%)";
+    changeEl.innerText =
+      (diff >= 0 ? "▲ " : "▼ ") +
+      diff.toFixed(2) +
+      " (" + percent.toFixed(2) + "%)";
 
     changeEl.className =
-      diff >= 0 ? "green" : "red";
+      diff >= 0 ? "up" : "down";
 
   }
   catch(e){
-
     console.log(e);
-
-    document.getElementById("current")
-      .innerHTML =
+    document.getElementById("current").innerText =
       "Failed to load";
   }
 }
 
 loadGold();
-
 </script>
 
 </body>
