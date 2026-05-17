@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gold Price India</title>
+  <style>
+    body{
+      background:#111;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding-top:50px;
+    }
+
+    .card{
+      background:#1e1e1e;
+      width:320px;
+      margin:auto;
+      padding:20px;
+      border-radius:12px;
+    }
+
+    .price{
+      font-size:28px;
+      margin:10px 0;
+    }
+
+    .up{
+      color:#00ff99;
+    }
+
+    .down{
+      color:#ff4d4d;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Gold Price (India)</h2>
+
+  <div>Current Price</div>
+  <div id="current" class="price">Loading...</div>
+
+  <div>Yesterday Close</div>
+  <div id="yesterday" class="price">Loading...</div>
+
+  <div id="change"></div>
+</div>
+
+<script>
+async function loadGold() {
+
+  const url =
+   "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=2d&interval=1d";
+
+  try {
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const result = data.chart.result[0];
+
+    const prices = result.indicators.quote[0].close;
+
+    const yesterdayUSD = prices[0];
+    const todayUSD = prices[1];
+
+    // USD -> INR conversion approximation
+    const usdToInr = 83;
+
+    // ounce -> gram
+    const ounceToGram = 31.1035;
+
+    const todayINR =
+      (todayUSD * usdToInr) / ounceToGram;
+
+    const yesterdayINR =
+      (yesterdayUSD * usdToInr) / ounceToGram;
+
+    const diff = todayINR - yesterdayINR;
+
+    const percent =
+      (diff / yesterdayINR) * 100;
+
+    document.getElementById("current").innerHTML =
+      "₹ " + todayINR.toFixed(2) + " / gram";
+
+    document.getElementById("yesterday").innerHTML =
+      "₹ " + yesterdayINR.toFixed(2) + " / gram";
+
+    const changeEl =
+      document.getElementById("change");
+
+    changeEl.innerHTML =
+      (diff >= 0 ? "▲ " : "▼ ") +
+      diff.toFixed(2) +
+      " (" + percent.toFixed(2) + "%)";
+
+    changeEl.className =
+      diff >= 0 ? "up" : "down";
+
+  } catch(err) {
+
+    document.getElementById("current")
+      .innerHTML = "Failed to load";
+
+    console.log(err);
+  }
+}
+
+loadGold();
+</script>
+
+</body>
+</html>
